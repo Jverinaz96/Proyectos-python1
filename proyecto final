@@ -1,0 +1,275 @@
+import csv
+from datetime import datetime
+import re
+
+class Usuario:
+    usuarios = []  # Lista de usuarios registrados
+    log_modificaciones = []  # Registro de modificaciones en la base de datos
+
+    def __init__(self, usuario, contrasena, rol):
+        self.usuario = usuario
+        self.contrasena = contrasena
+        self.rol = rol
+        Usuario.usuarios.append(self)
+
+    @staticmethod
+    def validar_contrasena(contrasena):
+        return len(contrasena) >= 8 and re.search(r"\d", contrasena)
+
+    @classmethod
+    def buscar_usuario(cls, usuario=None):
+        # Buscar usuario por nombre de usuario
+        for usuario_obj in cls.usuarios:
+            if usuario_obj.usuario == usuario:
+                return usuario_obj
+        return None
+
+    # Método para ver los logs de modificaciones
+    @staticmethod
+    def ver_log_modificaciones():
+        if Usuario.log_modificaciones:  # Verificar si hay logs en la lista
+            print("\nLog de modificaciones:")
+            for log in Usuario.log_modificaciones:
+                print(log)  # Mostrar cada entrada de log
+        else:
+            print("No hay registros de modificaciones.")
+
+# Clase para el monitor
+class Monitor(Usuario):
+    def __init__(self, usuario, contrasena):
+        super().__init__(usuario, contrasena, rol="Monitor")
+
+    def registrar_miembro(self, nombre, apellido, edad, genero, peso, altura, max_bpm,
+                          avg_bpm, resting_bpm, duracion, calorias, tipo_entrenamiento,
+                          porcentaje_grasa, agua, frecuencia, experiencia, bmi):
+        try:
+            # Validar que los datos a escribir en el CSV sean correctos
+            miembro_data = [nombre, apellido, edad, genero, peso, altura, max_bpm, avg_bpm,
+                            resting_bpm, duracion, calorias, tipo_entrenamiento, porcentaje_grasa,
+                            agua, frecuencia, experiencia, bmi]
+            
+            if len(miembro_data) != 17:
+                raise ValueError(f"Se esperaba 17 campos, pero se encontraron {len(miembro_data)}")
+            
+            with open("gym_members_exercise_tracking.csv", mode="a", newline="") as f:
+                escritor = csv.writer(f)
+                escritor.writerow(miembro_data)
+            
+            # Registrar la modificación en el log
+            log_entry = f"{datetime.now()}: {self.usuario} (Monitor) registró al miembro {nombre} {apellido}."
+            Usuario.log_modificaciones.append(log_entry)
+            print(f"Miembro {nombre} {apellido} registrado exitosamente.")
+            print(f"Log registrado: {log_entry}")  # Mostrar log para verificar
+        except Exception as e:
+            print(f"Error al registrar miembro: {e}")
+
+    def ver_miembros(self):
+        print("\nMiembros registrados:")
+        try:
+            with open("gym_members_exercise_tracking.csv", mode="r") as f:
+                lector = csv.reader(f)
+                headers = next(lector) 
+                if headers:
+                    print(f"{' | '.join(headers)}")  
+                    for row in lector:
+                        print(f"{' | '.join(row)}")  # Imprimir cada miembro registrado
+                else:
+                    print("No hay miembros registrados.")
+        except FileNotFoundError:
+            print("No se encontró el archivo de miembros.")
+        except Exception as e:
+            print(f"Error al leer los miembros: {e}")
+    
+    def modificar_miembro(self, nombre, apellido, nueva_edad):
+
+        try:
+            with open("gym_members_exercise_tracking.csv", mode="r") as f:
+                lector = csv.reader(f)
+                rows = list(lector)
+            
+            header = rows[0]  # Asumimos que la primera fila es el encabezado
+            miembro_encontrado = False
+            for row in rows[1:]:
+                if row[0] == nombre and row[1] == apellido:  # Compara nombre y apellido
+                    row[2] = nueva_edad  # Modificar la edad (asumiendo que la edad está en la columna 2)
+                    miembro_encontrado = True
+                    break
+            
+            if not miembro_encontrado:
+                print(f"No se encontró al miembro con nombre {nombre} y apellido {apellido}.")
+                return
+            
+            # Guardar los cambios en el archivo CSV
+            with open("gym_members_exercise_tracking.csv", mode="w", newline="") as f:
+                escritor = csv.writer(f)
+                escritor.writerows(rows)
+
+            # Registrar la modificación en el log
+            log_entry = f"{datetime.now()}: {self.usuario} (Monitor) modificó la edad del miembro {nombre} {apellido} a {nueva_edad}."
+            Usuario.log_modificaciones.append(log_entry)
+            print(f"Edad del miembro {nombre} {apellido} modificada a {nueva_edad}.")
+            print(f"Log registrado: {log_entry}")  # Mostrar log para verificar
+        except Exception as e:
+            print(f"Error al modificar miembro: {e}")
+
+# Clase para el super usuario
+class SuperUsuario(Usuario):
+    def __init__(self, usuario, contrasena):
+        super().__init__(usuario, contrasena, rol="SuperUsuario")
+
+    def crear_monitor(self, usuario, contrasena):
+        if Usuario.buscar_usuario(usuario):
+            print("El usuario ya existe.")
+            return
+        if not Usuario.validar_contrasena(contrasena):
+            print("La contraseña debe tener al menos 8 caracteres y contener un número.")
+            return
+        Monitor(usuario, contrasena)
+        print(f"Monitor {usuario} creado exitosamente.")
+        
+    # Método para modificar miembro (por nombre y apellido)
+    def modificar_miembro(self, nombre, apellido, nueva_edad):
+        # Llamamos al método de modificar de Monitor, ya que es el mismo comportamiento
+        monitor = Monitor.buscar_usuario(usuario=nombre)
+        if monitor:
+            monitor.modificar_miembro(nombre, apellido, nueva_edad)
+        else:
+            print(f"No se encontró al miembro {nombre} {apellido}.")
+            
+    # Método para ver los miembros registrados
+    def ver_miembros(self):
+        print("\nMiembros registrados:")
+        try:
+            with open("gym_members_exercise_tracking.csv", mode="r") as f:
+                lector = csv.reader(f)
+                headers = next(lector)  
+                if headers:
+                    print(f"{' | '.join(headers)}")  
+                    for row in lector:
+                        print(f"{' | '.join(row)}")  
+                    print("No hay miembros registrados.")
+        except FileNotFoundError:
+            print("No se encontró el archivo de miembros.")
+        except Exception as e:
+            print(f"Error al leer los miembros: {e}")
+    
+    # Método para ver usuarios registrados
+    def ver_usuarios(self):
+        print("\nUsuarios registrados:")
+        for usuario in Usuario.usuarios:
+            print(f"Usuario: {usuario.usuario}, Rol: {usuario.rol}")
+
+# **Usuarios "quemados"** (hardcoded)
+def crear_usuarios_quemados():
+    # SuperUsuario
+    super_user = SuperUsuario("jverinaz", "contrasena123")
+    # Monitor
+    monitor_user = Monitor("Monitor1", "contrasena123")
+    return super_user, monitor_user
+
+# Función para mostrar el menú principal
+def menu():
+    print("\n1. Login")
+    print("2. Salir")
+    return input("Seleccione una opción: ")
+
+# Función de login
+def login():
+    usuario = input("Ingrese su usuario: ")
+    contrasena = input("Ingrese su contraseña: ")
+    usuario_obj = Usuario.buscar_usuario(usuario=usuario)
+    
+    if usuario_obj and usuario_obj.contrasena == contrasena:
+        if isinstance(usuario_obj, SuperUsuario):
+            super_usuario_menu(usuario_obj)
+        elif isinstance(usuario_obj, Monitor):
+            monitor_menu(usuario_obj)
+        else:
+            print("Usuario reconocido, pero sin rol asignado.")
+    else:
+        print("Credenciales incorrectas.")
+
+# Menú para el super usuario
+def super_usuario_menu(super_usuario):
+    while True:
+        print("\nMenú del Super Usuario")
+        print("1. Crear monitor")
+        print("2. Ver log de modificaciones")
+        print("3. Ver usuarios (Monitores y Super Usuarios)")
+        print("4. Ver miembros registrados")
+        print("5. Modificar miembro")
+        print("6. Salir")
+        
+        opcion = input("Seleccione una opción: ")
+        
+        if opcion == "1":
+            usuario = input("Usuario del monitor: ")
+            contrasena = input("Contraseña del monitor: ")
+            super_usuario.crear_monitor(usuario, contrasena)
+        elif opcion == "2":
+            super_usuario.ver_log_modificaciones()
+        elif opcion == "3":
+            super_usuario.ver_usuarios()
+        elif opcion == "4":
+            super_usuario.ver_miembros()
+        elif opcion == "5":
+            nombre = input("Nombre del miembro a modificar: ")
+            apellido = input("Apellido del miembro a modificar: ")
+            nueva_edad = input("Nueva edad: ")
+            super_usuario.modificar_miembro(nombre, apellido, nueva_edad)
+        elif opcion == "6":
+            break
+        else:
+            print("Opción no válida.")
+
+# Menú para el monitor
+def monitor_menu(monitor):
+    while True:
+        print("\nMenú del Monitor")
+        print("1. Registrar miembro")
+        print("2. Ver miembros registrados")
+        print("3. Salir")
+        
+        opcion = input("Seleccione una opción: ")
+
+        if opcion == "1":
+            nombre = input("Nombre: ")
+            apellido = input("Apellido: ")
+            edad = input("Edad: ")
+            genero = input("Género: ")
+            peso = input("Peso: ")
+            altura = input("Altura: ")
+            max_bpm = input("Max BPM: ")
+            avg_bpm = input("Avg BPM: ")
+            resting_bpm = input("Resting BPM: ")
+            duracion = input("Duración (min): ")
+            calorias = input("Calorías: ")
+            tipo_entrenamiento = input("Tipo de entrenamiento: ")
+            porcentaje_grasa = input("Porcentaje de grasa: ")
+            agua = input("Agua (L): ")
+            frecuencia = input("Frecuencia (min): ")
+            experiencia = input("Experiencia (años): ")
+            bmi = input("BMI: ")
+            monitor.registrar_miembro(nombre, apellido, edad, genero, peso, altura, max_bpm,
+                                      avg_bpm, resting_bpm, duracion, calorias, tipo_entrenamiento,
+                                      porcentaje_grasa, agua, frecuencia, experiencia, bmi)
+        elif opcion == "2":
+            monitor.ver_miembros()
+        elif opcion == "3":
+            break
+        else:
+            print("Opción no válida.")
+
+# Iniciar el sistema
+def iniciar():
+    super_user, monitor_user = crear_usuarios_quemados()
+    while True:
+        opcion = menu()
+        if opcion == "1":
+            login()
+        elif opcion == "2":
+            print("Saliendo del sistema.")
+            break
+
+# Iniciar el sistema
+iniciar()
